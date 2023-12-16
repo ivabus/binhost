@@ -12,6 +12,8 @@ cargo install --git https://github.com/ivabus/binhost
 
 List options with `--help`
 
+Make sure to use proxy with rate limiter in prod.
+
 #### Directory structure
 
 Directory, passed to `binhost` `--dir` option (defaults to `./bin`) should look like (for `hello` binary)
