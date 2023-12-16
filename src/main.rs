@@ -31,6 +31,7 @@ fi
 "#;
 #[cfg(not(feature = "sha256"))]
 static HASH_CALCULATION_SH: &str = "";
+
 async fn reload_bins(bins: (&mut HashMap<String, Bin>, &mut Instant), args: &Args) {
 	if (Instant::now() - *bins.1).as_secs() > args.refresh {
 		*bins.0 = get_bins(args).await;
