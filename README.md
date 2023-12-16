@@ -67,6 +67,8 @@ GET /bin/<BIN>/<PLATFORM>/<ARCH> HTTP/1.1
 
 ### Get sha256 hash of binary for specific platform
 
+Only with "sha256" feature (recalculates hash on each request, may be bad on large files or lots of requests)
+
 #### Request
 
 ```http request

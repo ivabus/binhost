@@ -12,14 +12,25 @@ extern crate rocket;
 
 use rocket::http::Status;
 use rocket::response::content::RawText;
-use rocket::tokio::io::AsyncReadExt;
-use sha2::digest::FixedOutput;
-use sha2::Digest;
 
 static mut BINS: Option<(HashMap<String, Bin>, Instant)> = None;
 
 static WEB_SH: &str = include_str!("../web.sh");
 
+#[cfg(feature = "sha256")]
+static HASH_CALCULATION_SH: &str = r#"
+if ! which sha256sum > /dev/null; then
+  echo "No \`sha256sum\` command found, continuing without checking" 1>&2
+else
+  echo ":: Checking hashsum" 1>&2
+  if ! ($DOWNLOAD_COMMAND {{EXTERNAL_ADDRESS}}/bin/$NAME/$(uname)/$(uname -m)/sha256 $OUTPUT_ARG - | sha256sum -c - > /dev/null); then
+    echo "sha256 is invalid" 1>&2
+    exit 255
+  fi
+fi
+"#;
+#[cfg(not(feature = "sha256"))]
+static HASH_CALCULATION_SH: &str = "";
 async fn reload_bins(bins: (&mut HashMap<String, Bin>, &mut Instant), args: &Args) {
 	if (Instant::now() - *bins.1).as_secs() > args.refresh {
 		*bins.0 = get_bins(args).await;
@@ -97,6 +108,7 @@ async fn get_script(bin: &str) -> ScriptResponse {
 				Some(bin) => {
 					let mut script = String::from(WEB_SH);
 					script = script
+						.replace("{{HASH_CALCULATION}}", HASH_CALCULATION_SH)
 						.replace("{{NAME}}", &bin.name)
 						.replace("{{PLATFORM_LIST}}", &format_platform_list(bin))
 						.replace("{{EXTERNAL_ADDRESS}}", &args.url);
@@ -126,8 +138,13 @@ async fn get_binary(bin: &str, platform: &str, arch: &str) -> BinaryResponse {
 	}
 }
 
+#[cfg(feature = "sha256")]
 #[get("/bin/<bin>/<platform>/<arch>/sha256")]
 async fn get_binary_hash(bin: &str, platform: &str, arch: &str) -> ScriptResponse {
+	use rocket::tokio::io::AsyncReadExt;
+	use sha2::digest::FixedOutput;
+	use sha2::Digest;
+
 	let args = Args::parse();
 	let file = NamedFile::open(format!(
 		"{}/{}/{}/{}/{}",
@@ -155,6 +172,11 @@ async fn get_binary_hash(bin: &str, platform: &str, arch: &str) -> ScriptRespons
 	}
 }
 
+#[cfg(not(feature = "sha256"))]
+#[get("/bin/<_bin>/<_platform>/<_arch>/sha256")]
+async fn get_binary_hash(_bin: &str, _platform: &str, _arch: &str) -> ScriptResponse {
+	ScriptResponse::Status(Status::BadRequest)
+}
 #[launch]
 async fn rocket() -> _ {
 	let args = Args::parse();
@@ -168,7 +190,7 @@ async fn rocket() -> _ {
 	}
 
 	let figment = Figment::from(rocket::Config::default())
-		.merge(("ident", "binhost"))
+		.merge(("ident", "BinHost"))
 		.merge(("port", args.port))
 		.merge(("address", args.address));
 	rocket::custom(figment).mount("/", routes![index, get_script, get_binary, get_binary_hash])

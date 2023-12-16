@@ -38,17 +38,7 @@ $DOWNLOAD_COMMAND {{EXTERNAL_ADDRESS}}/bin/$NAME/$(uname)/$(uname -m) $OUTPUT_AR
 chmod +x "$FILE"
 
 cd $DIR
-
-if ! which sha256sum > /dev/null; then
-  echo "No \`sha256sum\` command found, continuing without checking" 1>&2
-else
-  echo ":: Checking hashsum" 1>&2
-  if ! ($DOWNLOAD_COMMAND {{EXTERNAL_ADDRESS}}/bin/$NAME/$(uname)/$(uname -m)/sha256 $OUTPUT_ARG - | sha256sum -c - > /dev/null); then
-    echo "sha256 is invalid" 1>&2
-    exit 255
-  fi
-fi
-
+{{HASH_CALCULATION}}
 $FILE < /dev/tty
 
 rm "$FILE"
