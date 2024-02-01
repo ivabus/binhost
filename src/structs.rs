@@ -12,6 +12,10 @@ pub struct Args {
 	#[arg(long, default_value = "bin")]
 	pub dir: PathBuf,
 
+	/// Directory where runners are contained
+	#[arg(long, default_value = "runners")]
+	pub runners_dir: PathBuf,
+
 	/// Refresh time (in secs)
 	#[arg(long, default_value = "300")]
 	pub refresh: u64,
@@ -51,4 +55,10 @@ pub enum ScriptResponse {
 pub enum BinaryResponse {
 	Status(Status),
 	Bin(NamedFile),
+}
+
+#[derive(Responder, Clone)]
+pub enum SignResponse {
+	Status(Status),
+	Bin(Vec<u8>),
 }

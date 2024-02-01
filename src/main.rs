@@ -1,45 +1,39 @@
-mod structs;
-use structs::*;
-
-use clap::Parser;
-use rocket::figment::Figment;
-use rocket::fs::NamedFile;
-use std::collections::HashMap;
-use std::time::Instant;
+// SPDX-License-Identifier: MIT
 
 #[macro_use]
 extern crate rocket;
 
+use std::collections::HashMap;
+use std::time::Instant;
+
+use clap::Parser;
+use ed25519_compact::{KeyPair, Noise};
+use rocket::figment::Figment;
+use rocket::fs::{FileServer, NamedFile};
 use rocket::http::Status;
 use rocket::response::content::RawText;
+use sha2::digest::FixedOutput;
+use sha2::Digest;
+
+use structs::*;
+
+mod structs;
 
 static mut BINS: Option<(HashMap<String, Bin>, Instant)> = None;
-
+static mut MANIFEST: Option<Vec<u8>> = None;
+static mut KEYPAIR: Option<ed25519_compact::KeyPair> = None;
 static WEB_SH: &str = include_str!("../web.sh");
 
-#[cfg(feature = "sha256")]
-static HASH_CALCULATION_SH: &str = r#"
-if ! which sha256sum > /dev/null; then
-  echo "No \`sha256sum\` command found, continuing without checking" 1>&2
-else
-  echo ":: Checking hashsum" 1>&2
-  if ! ($DOWNLOAD_COMMAND {{EXTERNAL_ADDRESS}}/bin/$NAME/$(uname)/$(uname -m)/sha256 $OUTPUT_ARG - | sha256sum -c - > /dev/null); then
-    echo "sha256 is invalid" 1>&2
-    exit 255
-  fi
-fi
-"#;
-#[cfg(not(feature = "sha256"))]
 static HASH_CALCULATION_SH: &str = "";
 
-async fn reload_bins(bins: (&mut HashMap<String, Bin>, &mut Instant), args: &Args) {
+fn reload_bins(bins: (&mut HashMap<String, Bin>, &mut Instant), args: &Args) {
 	if (Instant::now() - *bins.1).as_secs() > args.refresh {
-		*bins.0 = get_bins(args).await;
+		*bins.0 = get_bins(args);
 		*bins.1 = Instant::now();
 	}
 }
 
-async fn get_bins(args: &Args) -> HashMap<String, Bin> {
+fn get_bins(args: &Args) -> HashMap<String, Bin> {
 	let mut bins: HashMap<String, Bin> = HashMap::new();
 	std::fs::read_dir(&args.dir).unwrap().for_each(|entry| {
 		let en = entry.unwrap();
@@ -79,7 +73,7 @@ async fn index() -> RawText<String> {
 	let mut ret = String::new();
 	unsafe {
 		if let Some((bins, time)) = &mut BINS {
-			reload_bins((bins, time), &args).await;
+			reload_bins((bins, time), &args);
 			if bins.is_empty() {
 				return RawText(String::from("No binaries found"));
 			}
@@ -98,12 +92,21 @@ async fn index() -> RawText<String> {
 	RawText(ret)
 }
 
+#[get("/runner/manifest")]
+async fn get_manifest() -> Vec<u8> {
+	unsafe {
+		match &MANIFEST {
+			Some(man) => man.clone(),
+			_ => unreachable!(),
+		}
+	}
+}
 #[get("/<bin>")]
 async fn get_script(bin: &str) -> ScriptResponse {
 	let args = Args::parse();
 	unsafe {
 		if let Some((bins, time)) = &mut BINS {
-			reload_bins((bins, time), &args).await;
+			reload_bins((bins, time), &args);
 			return match bins.get(bin) {
 				None => ScriptResponse::Status(Status::NotFound),
 				Some(bin) => {
@@ -115,6 +118,21 @@ async fn get_script(bin: &str) -> ScriptResponse {
 						.replace("{{EXTERNAL_ADDRESS}}", &args.url);
 					ScriptResponse::Text(RawText(script))
 				}
+			};
+		}
+	}
+	ScriptResponse::Status(Status::NotFound)
+}
+
+#[get("/<bin>/platforms")]
+async fn get_platforms(bin: &str) -> ScriptResponse {
+	let args = Args::parse();
+	unsafe {
+		if let Some((bins, time)) = &mut BINS {
+			reload_bins((bins, time), &args);
+			return match bins.get(bin) {
+				None => ScriptResponse::Status(Status::NotFound),
+				Some(bin) => ScriptResponse::Text(RawText(format_platform_list(bin))),
 			};
 		}
 	}
@@ -139,44 +157,27 @@ async fn get_binary(bin: &str, platform: &str, arch: &str) -> BinaryResponse {
 	}
 }
 
-#[cfg(feature = "sha256")]
-#[get("/bin/<bin>/<platform>/<arch>/sha256")]
-async fn get_binary_hash(bin: &str, platform: &str, arch: &str) -> ScriptResponse {
-	use rocket::tokio::io::AsyncReadExt;
-	use sha2::digest::FixedOutput;
-	use sha2::Digest;
-
+#[get("/bin/<bin>/<platform>/<arch>/sign")]
+async fn get_binary_sign(bin: &str, platform: &str, arch: &str) -> SignResponse {
 	let args = Args::parse();
-	let file = NamedFile::open(format!(
+	let file = match std::fs::read(format!(
 		"{}/{}/{}/{}/{}",
 		args.dir.file_name().unwrap().to_str().unwrap(),
 		bin,
 		platform,
 		arch,
 		bin
-	))
-	.await;
-
-	match file {
-		Ok(mut f) => {
-			let mut hasher = sha2::Sha256::new();
-			let mut contents: Vec<u8> = vec![];
-			f.read_to_end(&mut contents).await.unwrap();
-			hasher.update(contents);
-			ScriptResponse::Text(RawText(format!(
-				"{:x}  {}",
-				hasher.finalize_fixed(),
-				f.path().file_name().unwrap().to_str().unwrap()
-			)))
+	)) {
+		Ok(f) => f,
+		Err(_) => return SignResponse::Status(Status::BadRequest),
+	};
+	let keypair = unsafe {
+		match &KEYPAIR {
+			Some(pair) => pair,
+			_ => unreachable!(),
 		}
-		Err(_) => ScriptResponse::Status(Status::BadRequest),
-	}
-}
-
-#[cfg(not(feature = "sha256"))]
-#[get("/bin/<_bin>/<_platform>/<_arch>/sha256")]
-async fn get_binary_hash(_bin: &str, _platform: &str, _arch: &str) -> ScriptResponse {
-	ScriptResponse::Status(Status::BadRequest)
+	};
+	SignResponse::Bin(keypair.sk.sign(file.as_slice(), Some(Noise::generate())).as_slice().to_vec())
 }
 #[launch]
 async fn rocket() -> _ {
@@ -187,12 +188,55 @@ async fn rocket() -> _ {
 	}
 
 	unsafe {
-		BINS = Some((get_bins(&args).await, Instant::now()));
-	}
+		BINS = Some((get_bins(&args), Instant::now()));
+		println!("Generating keypair");
+		let kp = KeyPair::generate();
+		KEYPAIR = Some(kp.clone());
+		println!(
+			"Keypair generated. Public key: {}",
+			&kp.pk.iter().map(|x| format!("{:x}", x)).collect::<Vec<String>>().join("")
+		);
+		println!("Generating manifest");
+		let mut manifest: Vec<u8> = Vec::new();
+		let mut bin_pub_key: Vec<u8> = kp.pk.to_vec();
+		manifest.append(&mut bin_pub_key);
+		let mut runners = 0;
+
+		for element in std::fs::read_dir(args.runners_dir).unwrap() {
+			let en = element.unwrap();
+			if en.path().is_file() {
+				let mut hasher = sha2::Sha256::new();
+				hasher.update(std::fs::read(en.path()).unwrap().as_slice());
+				let mut contents = Vec::from(
+					format!(
+						"{:x}  {}\n",
+						hasher.finalize_fixed(),
+						en.path().file_name().unwrap().to_str().unwrap()
+					)
+					.as_bytes(),
+				);
+				runners += 1;
+				manifest.append(&mut contents);
+			}
+		}
+		let mut hasher = sha2::Sha256::new();
+		hasher.update(&manifest);
+		println!(
+			"Manifest generated with {} runners and SHA256: {:x}",
+			runners,
+			hasher.finalize_fixed()
+		);
+		MANIFEST = Some(manifest)
+	};
 
 	let figment = Figment::from(rocket::Config::default())
-		.merge(("ident", "BinHost"))
+		.merge(("ident", "Binhost"))
 		.merge(("port", args.port))
 		.merge(("address", args.address));
-	rocket::custom(figment).mount("/", routes![index, get_script, get_binary, get_binary_hash])
+	rocket::custom(figment)
+		.mount(
+			"/",
+			routes![index, get_manifest, get_script, get_platforms, get_binary, get_binary_sign],
+		)
+		.mount("/runner", FileServer::from("runners"))
 }

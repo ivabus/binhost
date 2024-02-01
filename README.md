@@ -1,6 +1,6 @@
 # BinHost
 
-> HTTP server to easily serve (prebuilt) binaries for any (UNIX-like) platform
+> HTTP server to easily serve (prebuilt) binaries for any (UNIX-like) platform with authenticity check
 
 ## Installation
 
@@ -33,55 +33,51 @@ bin
             └── hello
 ```
 
+#### Runners
+
+Runner is a (necessary) subprogram, that checks ED25519 signature of a binary file and needs to be statically compiled for every platform, that could use binaries from `binhost` server. 
+
+Directory, passed to `binhost` `--runners-dir` option (defaults to `./runners`) should look like (for `Linux-x86_64`, `Linux-aarch64` and `Darwin-arm64` compiled runners)
+
+```tree
+runners
+├── runner-Darwin-arm64
+├── runner-Linux-aarch64
+└── runner-Linux-x86_64
+```
+
 ## Client usage
 
-### Get available binaries
+### Execute specific binary <bin> with manifest validity check
 
-#### Request
+Manifest validity check provides a fully-secured binary distribution chain.
 
-```http request
-GET / HTTP/1.1
+```shell
+curl ADDRESS:PORT/<bin> | KEY=... bash
 ```
 
-#### Example response
+`KEY` first few symbols from hex representation of SHA256 sum of manifest (printed to stdout on `binhost` startup).
 
-```
-- hello (platforms: ["Linux-aarch64", "Darwin-arm64", "Darwin-x86_64"])
-```
+Only this option should be considered as secure.
 
-### Get script for specific binary (suitable for `curl | sh` syntax)
+### Execute specific binary <bin> without validity check
 
-This script will determine platform and arch and download necessary binary (and check hashsum if `sha256sum` binary is present in `$PATH`).
-
-#### Request
-
-```http request
-GET /<BIN> HTTP/1.1
+```shell
+curl ADDRESS:PORT/<bin> | bash
 ```
 
-### Get binary for specific platform
+### Download and reuse script
 
-#### Request
-
-```http request
-GET /bin/<BIN>/<PLATFORM>/<ARCH> HTTP/1.1
+```shell
+curl ADDRESS:PORT/<bin> -o script.sh
+./script.sh # Execute preloaded bin configuration
+BIN=<newbin> ./script.sh # Execute newbin (download)
+BIN=<newbin> EXTERNAL_ADDRESS=<newaddress> ./script.sh # Execute newbin from newaddress
 ```
 
-### Get sha256 hash of binary for specific platform
+### API
 
-Only with "sha256" feature (recalculates hash on each request, may be bad on large files or lots of requests)
-
-#### Request
-
-```http request
-GET /bin/<BIN>/<PLATFORM>/<ARCH>/sha256 HTTP/1.1
-```
-
-#### Example response
-
-```text
-a5d1fba1c28b60038fb1008a3c482b4119070a537af86a05046dedbe8f85e18d  hello
-```
+See full HTTP API in [API.md](./API.md)
 
 ## License
 
