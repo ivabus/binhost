@@ -42,11 +42,15 @@ GET /bin/<BIN>/<PLATFORM>/<ARCH>/sign HTTP/1.1
 
 Manifest is a file, that contains ED25519 public key and SHA256sums list
 
+#### Request
+
 ```http request
 GET /runner/manifest HTTP/1.1
 ```
 
 ### Get binary runner
+
+#### Request
 
 ```http request
 GET /runner/<runner> HTTP/1.1
