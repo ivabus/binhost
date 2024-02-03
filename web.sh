@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # SPDX-License-Identifier: MIT
 set -e
 
@@ -96,7 +96,7 @@ fi
 
 chmod +x "$FILE"
 
-$FILE < /dev/tty
+$FILE $ARGS < /dev/tty
 
 cd
 

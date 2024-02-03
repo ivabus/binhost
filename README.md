@@ -53,17 +53,19 @@ runners
 Manifest validity check provides a fully-secured binary distribution chain.
 
 ```shell
-curl ADDRESS:PORT/<bin> | KEY=... bash
+curl ADDRESS:PORT/<bin> | KEY=... sh
 ```
 
 `KEY` first few symbols from hex representation of SHA256 sum of manifest (printed to stdout on `binhost` startup).
+
+Additional arguments are set with `ARGS` environment variable
 
 Only this option should be considered as secure.
 
 ### Execute specific binary <bin> without validity check
 
 ```shell
-curl ADDRESS:PORT/<bin> | bash
+curl ADDRESS:PORT/<bin> | sh
 ```
 
 ### Download and reuse script

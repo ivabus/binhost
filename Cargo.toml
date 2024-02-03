@@ -2,7 +2,7 @@ workspace = { members = [ "runner" ] }
 
 [package]
 name = "binhost"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/ivabus/binhost"
