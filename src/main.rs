@@ -21,7 +21,7 @@ mod structs;
 
 static mut BINS: Option<(HashMap<String, Bin>, Instant)> = None;
 static mut MANIFEST: Option<Vec<u8>> = None;
-static mut KEYPAIR: Option<ed25519_compact::KeyPair> = None;
+static mut KEYPAIR: Option<KeyPair> = None;
 static WEB_SH: &str = include_str!("../web.sh");
 
 static HASH_CALCULATION_SH: &str = "";
@@ -71,6 +71,13 @@ fn format_platform_list(bin: &Bin) -> String {
 async fn index() -> RawText<String> {
 	let args = Args::parse();
 	let mut ret = String::new();
+	unsafe {
+		if let Some(manifest) = &MANIFEST {
+			let mut hasher = sha2::Sha256::new();
+			hasher.update(manifest);
+			ret.push_str(&format!("Manifest hashsum: {:x}\n", hasher.finalize_fixed()));
+		}
+	}
 	unsafe {
 		if let Some((bins, time)) = &mut BINS {
 			reload_bins((bins, time), &args);
