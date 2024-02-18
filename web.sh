@@ -19,9 +19,24 @@ requireCommands() {
   done
 }
 
-requireCommands uname sha256sum cut dd chmod rm realpath expr
+requireCommands uname cut dd chmod rm realpath expr
 
-if [ "$(realpath $(command -v sha256sum))" = "/bin/busybox" ]; then
+# Finding alternative, but supported sha256sums
+SHA256SUM=""
+if command -v sha256sum &> /dev/null; then
+  export SHA256SUM="sha256sum"
+else
+  if command -v shasum &> /dev/null; then
+    SHASUMVER=$(shasum -v | cut -c 1)
+    if [ $SHASUMVER -ge 6 ]; then
+      export SHA256SUM="shasum -a 256"
+    fi
+  else
+    fail "Could not find sha256sum executable"
+  fi
+fi
+
+if [ "$(realpath $SHA256SUM)" = "/bin/busybox" ]; then
   fail "Busybox sha256sum detected, will not work. Refusing to continue"
 fi
 
@@ -60,7 +75,7 @@ cd $DIR
 print ":: Downloading manifest"
 $DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/runner/manifest $OUTPUT_ARG manifest
 
-MANIFEST_HASHSUM=$(sha256sum manifest)
+MANIFEST_HASHSUM=$($SHA256SUM manifest)
 
 if [ ! -z $KEY ]; then
   if [ ! $KEY = "$(echo $MANIFEST_HASHSUM | cut -c 1-${#KEY})" ]; then
@@ -80,7 +95,7 @@ print ":: Downloading runner"
 
 $DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/runner/runner-$PLATFORM-$ARCH $OUTPUT_ARG "runner-$PLATFORM-$ARCH"
 
-if ! sha256sum -c hashes --ignore-missing; then
+if ! $SHA256SUM -c hashes --ignore-missing >&2 ; then
   fail "Incorrect hashsum of runner"
 fi
 
