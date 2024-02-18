@@ -12,8 +12,8 @@ fail() {
 }
 
 requireCommands() {
-  for cmd in $*; do
-    if ! command -v $cmd &> /dev/null; then
+  for cmd in "$@"; do
+    if ! command -v "$cmd" > /dev/null 2>&1; then
       fail "Cannot find required command: $cmd"
     fi
   done
@@ -23,20 +23,20 @@ requireCommands uname cut dd chmod rm realpath expr
 
 # Finding alternative, but supported sha256sums
 SHA256SUM=""
-if command -v sha256sum &> /dev/null; then
-  export SHA256SUM="sha256sum"
+if command -v sha256sum > /dev/null 2>&1; then
+   SHA256SUM="sha256sum"
 else
-  if command -v shasum &> /dev/null; then
+  if command -v shasum > /dev/null 2>&1; then
     SHASUMVER=$(shasum -v | cut -c 1)
-    if [ $SHASUMVER -ge 6 ]; then
-      export SHA256SUM="shasum -a 256"
+    if [ "$SHASUMVER" -ge 6 ]; then
+      SHA256SUM="shasum -a 256"
     fi
   else
-    fail "Could not find sha256sum executable"
+    fail "Could not find suitable sha256sum executable"
   fi
 fi
 
-if [ "$(realpath $SHA256SUM)" = "/bin/busybox" ]; then
+if [ "$(realpath "$SHA256SUM" 2> /dev/null)" = "/bin/busybox" ]; then
   fail "Busybox sha256sum detected, will not work. Refusing to continue"
 fi
 
@@ -50,35 +50,35 @@ FILE="$DIR/$NAME"
 PLATFORM="$(uname)"
 ARCH="$(uname -m)"
 
-if ! command -v curl &> /dev/null; then
-  if ! command -v wget &> /dev/null; then
+if ! command -v curl > /dev/null 2>&1; then
+  if ! command -v wget > /dev/null 2>&1; then
     fail "No curl or wget found, install one and rerun the script"
   fi
-  export DOWNLOAD_COMMAND="wget"
-  export OUTPUT_ARG="-O"
+  DOWNLOAD_COMMAND="wget"
+  OUTPUT_ARG="-O"
 fi
 
 PLATFORM_LIST="{{PLATFORM_LIST}}"
 # Making script truly portable
 if [ ! "{{NAME}}" = $NAME ]; then
   print ":: Fetching platforms"
-  export PLATFORM_LIST=$($DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/$NAME/platforms $OUTPUT_ARG /dev/stdout)
+  PLATFORM_LIST=$($DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/$NAME/platforms $OUTPUT_ARG /dev/stdout)
 fi
 
 if ! expr "$PLATFORM_LIST" : "\(.*$(uname)-$(uname -m).*\)" > /dev/null; then
   fail "Platform \"$(uname)-$(uname -m)\" is not supported"
 fi
 
-mkdir $DIR
-cd $DIR
+mkdir "$DIR"
+cd "$DIR"
 
 print ":: Downloading manifest"
 $DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/runner/manifest $OUTPUT_ARG manifest
 
 MANIFEST_HASHSUM=$($SHA256SUM manifest)
 
-if [ ! -z $KEY ]; then
-  if [ ! $KEY = "$(echo $MANIFEST_HASHSUM | cut -c 1-${#KEY})" ]; then
+if [ -n "$KEY" ]; then
+  if [ ! "$KEY" = "$(echo "$MANIFEST_HASHSUM" | cut -c 1-${#KEY})" ]; then
     fail "Invalid manifest hashsum"
   fi
 else
@@ -86,14 +86,14 @@ else
 fi
 
 print ":: Downloading signature"
-$DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/bin/$NAME/$PLATFORM/$ARCH/sign $OUTPUT_ARG signature
+$DOWNLOAD_COMMAND "$EXTERNAL_ADDRESS/bin/$NAME/$PLATFORM/$ARCH/sign" $OUTPUT_ARG signature
 
 dd if=manifest of=public_key count=32 bs=1 2> /dev/null
 dd if=manifest of=hashes skip=32 bs=1 2> /dev/null
 
 print ":: Downloading runner"
 
-$DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/runner/runner-$PLATFORM-$ARCH $OUTPUT_ARG "runner-$PLATFORM-$ARCH"
+$DOWNLOAD_COMMAND "$EXTERNAL_ADDRESS/runner/runner-$PLATFORM-$ARCH" $OUTPUT_ARG "runner-$PLATFORM-$ARCH"
 
 if ! $SHA256SUM -c hashes --ignore-missing >&2 ; then
   fail "Incorrect hashsum of runner"
@@ -103,9 +103,9 @@ chmod +x "runner-$PLATFORM-$ARCH"
 
 print ":: Downloading binary"
 
-$DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/bin/$NAME/$PLATFORM/$ARCH $OUTPUT_ARG "$FILE"
+$DOWNLOAD_COMMAND "$EXTERNAL_ADDRESS/bin/$NAME/$PLATFORM/$ARCH" $OUTPUT_ARG "$FILE"
 
-if ! ./runner-$PLATFORM-$ARCH "$FILE" >&2; then
+if ! "./runner-$PLATFORM-$ARCH" "$FILE" >&2; then
   exit 2
 fi
 
