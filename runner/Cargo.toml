@@ -3,9 +3,19 @@ name = "runner"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 libc = { version = "0.2.152", default-features = false }
 ed25519-compact = { version = "2.0.6", default-features = false }
 numtoa = "0.2.4"
+
+# Reducing size as much as possible
+[profile.release]
+strip = true
+opt-level = "s"
+lto = true
+panic = "abort"
+codegen-units = 1
+
+[profile.dev]
+# Doesn't build on my machine without
+opt-level = 1
