@@ -72,8 +72,6 @@ static MANIFEST: Lazy<Vec<u8>> = Lazy::new(|| {
 });
 static WEB_SH: &str = include_str!("../web.sh");
 
-static HASH_CALCULATION_SH: &str = "";
-
 async fn reload_bins(args: &Args) {
 	let (bins, time) = &mut *BINS.write().await;
 	if (Instant::now() - *time).as_secs() > args.refresh {
@@ -160,7 +158,6 @@ async fn get_script(bin: &str) -> ScriptResponse {
 		Some(bin) => {
 			let mut script = String::from(WEB_SH);
 			script = script
-				.replace("{{HASH_CALCULATION}}", HASH_CALCULATION_SH)
 				.replace("{{NAME}}", &bin.name)
 				.replace("{{PLATFORM_LIST}}", &format_platform_list(bin))
 				.replace("{{EXTERNAL_ADDRESS}}", &args.url);
