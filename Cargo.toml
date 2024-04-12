@@ -1,7 +1,7 @@
 
 [package]
 name = "binhost"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/ivabus/binhost"

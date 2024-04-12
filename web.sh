@@ -23,17 +23,28 @@ requireCommands uname cut dd chmod rm realpath expr
 
 # Finding alternative, but supported sha256sums
 SHA256SUM=""
+SHASUMFLAGS=""
+PLATFORM="$(uname)"
+ARCH="$(uname -m)"
 if command -v sha256sum > /dev/null 2>&1; then
    SHA256SUM="sha256sum"
+   SHASUMFLAGS="-c hashes --ignore-missing"
 else
+  if command -v sha256 > /dev/null 2>&1; then
+      SHA256SUM="sha256"
+      SHASUMFLAGS="-C hashes runner-$PLATFORM-$ARCH"
+  fi
   if command -v shasum > /dev/null 2>&1; then
     SHASUMVER=$(shasum -v | cut -c 1)
     if [ "$SHASUMVER" -ge 6 ]; then
       SHA256SUM="shasum -a 256"
+      SHASUMFLAGS="-c hashes --ignore-missing"
     fi
-  else
-    fail "Could not find suitable sha256sum executable"
   fi
+fi
+
+if [ SHA256SUM = "" ]; then
+    fail "Could not find suitable sha256sum executable"
 fi
 
 if [ "$(realpath "$SHA256SUM" 2> /dev/null)" = "/bin/busybox" ]; then
@@ -47,8 +58,6 @@ DOWNLOAD_COMMAND="curl"
 OUTPUT_ARG="-o"
 DIR="/tmp/binhost-$NAME-$(date +%s)"
 FILE="$DIR/$NAME"
-PLATFORM="$(uname)"
-ARCH="$(uname -m)"
 
 if ! command -v curl > /dev/null 2>&1; then
   if ! command -v wget > /dev/null 2>&1; then
@@ -75,7 +84,7 @@ cd "$DIR"
 print ":: Downloading manifest"
 $DOWNLOAD_COMMAND $EXTERNAL_ADDRESS/runner/manifest $OUTPUT_ARG manifest
 
-MANIFEST_HASHSUM=$($SHA256SUM manifest)
+MANIFEST_HASHSUM=$(cat manifest | $SHA256SUM)
 
 if [ -n "$KEY" ]; then
   if [ ! "$KEY" = "$(echo "$MANIFEST_HASHSUM" | cut -c 1-${#KEY})" ]; then
@@ -95,7 +104,7 @@ print ":: Downloading runner"
 
 $DOWNLOAD_COMMAND "$EXTERNAL_ADDRESS/runner/runner-$PLATFORM-$ARCH" $OUTPUT_ARG "runner-$PLATFORM-$ARCH"
 
-if ! $SHA256SUM -c hashes --ignore-missing >&2 ; then
+if ! $SHA256SUM $SHASUMFLAGS >&2 ; then
   fail "Incorrect hashsum of runner"
 fi
 

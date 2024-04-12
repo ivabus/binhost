@@ -1,6 +1,6 @@
 [package]
 name = "runner"
-version = "0.1.0"
+version = "0.3.4"
 edition = "2021"
 
 [dependencies]
@@ -12,7 +12,7 @@ numtoa = "0.2.4"
 [profile.release]
 strip = true
 opt-level = "s"
-lto = true
+lto = "fat"
 panic = "abort"
 codegen-units = 1
 

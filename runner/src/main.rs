@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// "Runner" is written in no_std Rust for the smaller executable size: ~49KiB (Darwin arm64) vs ~300KiB
+// "Runner" is written in no_std Rust for the smaller executable size: ~49KiB (Darwin arm64)
 
 #![no_main]
 #![no_std]
@@ -19,7 +19,6 @@ pub unsafe extern "C" fn main(_argc: i32, _argv: *const *const c_char) -> i32 {
 	printf("Starting runner\n\0".as_bytes().as_ptr() as *const c_char);
 
 	let mut buff_public_key = [0_u8; PUBKEY_LEN];
-	let a = 0;
 	read(
 		open("public_key\0".as_bytes().as_ptr() as *const c_char, O_RDONLY),
 		buff_public_key.as_mut_ptr() as *mut c_void,

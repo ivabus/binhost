@@ -221,6 +221,7 @@ async fn rocket() -> _ {
 	}
 
 	let _ = &*BINS.read().await;
+	let _ = &*MANIFEST;
 
 	let figment = Figment::from(rocket::Config::default())
 		.merge(("ident", "Binhost"))
